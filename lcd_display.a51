@@ -44,7 +44,8 @@ START:  	MOV SPACE_CTR, #33d
 			MOV BTN_CTR, #1d
 			SETB IT0			
 			MOV IE, #10000001b  ;Initialize INT0 ;INT0 Begins when pushbutton is pressed(P3.2, Pin 12 AT89)			
-			
+			MOV R0, #45H //Memory to write the values for BT
+
 			MOV TMOD, #20H		
 			MOV TH1, #0FDH		;Baud Rate 9600
 			MOV SCON, #50H		;Serial Mode 1 (8 bits + 1 stop bit)
@@ -140,23 +141,25 @@ HERE: 		SJMP HERE // wait indefinitely
 
 //----------------------INTERRUPTION-----------------------------------------------
 INTER_BT:	
-			MOV ICURR_CHAR, 80H // Move to the string beginning 
-			MOV INT_CTR, 80H  //Initialize counter 
+			MOV @R0, #01H //Write 01 as ending caracter
+			MOV R0, #45H //Restart Memory to read the values
+		
+		
 
-LOOP:		
-			MOV R0, ICURR_CHAR // GO BACK TO R0 
-			MOV A, @R0         //MOVE CURR CONTENT TO MEMORY
-			ACALL SEND         //SEND INFO
-			INC ICURR_CHAR     //INCREMENT COUNTER AND MOVE TO NEXT MEM
-			INC INT_CTR        //INCREMENT COUTER 
-			MOV A, INT_CTR				
-			CJNE A, CHAR_CTR, LOOP  //COMPARE AND MOVE IF NOT COMPLETE
-			
-			
+LOOP:	
+		
+		MOV A, @R0 // MOV value
+		LCALL SEND // Send value to BTserial
+		INC R0 // Inc memory ptr
+		MOV A, @R0  //MOV nest value to A
+		CJNE A, #01H, LOOP//If value isn´t 01, keep reading
+		SJMP RETURN
+	
 SEND: 		MOV SBUF, A //SEND DATA
 HERE2: 		JNB TI, HERE2 // WAIT UNITL THE LAST BIT IS SENT
 			CLR TI
-			RETI
+			//SJMP CONTINUE2
+RETURN:		RETI
 
 //-----------------------WRITE DATA------------------------------
 			
@@ -252,10 +255,11 @@ MAT_TABLE:
 DISP_DATA:	MOV A, TEMP //DATA REQUIRED TO DISPLAY
 			MOVC A, @A+DPTR 
 TEST:		MOV P0, A // send data to port 1
-
-
-			MOV CURR_CHAR, A // CURRENT_CHAR FOR INTERRUPTION
-			INC CHAR_CTR
+			
+			//Write data on memory to read later in the BT interruption
+			MOV @R0, A
+			INC R0 //Increment memory ptr
+			
 			
 			SETB P2.7 // RS = 1 for data
 			CLR P2.6 // R/W = 0 for write operation
@@ -311,7 +315,7 @@ ORG 0300H
 			DB  031H	;D
 
 
-ORG 0400H /		
+ORG 0400H 	
 						
 			DB  0DH	;1 -0 + D  
 			DB  0EH ;2 -0 + # (E)
